@@ -287,6 +287,10 @@
       card.className = `card ${c.is_allowed ? 'allowed' : 'forbidden'}`;
       card.dataset.id = c.id;
 
+      const debt = c.debt || 0;
+      const debtClass = debt > 0 ? 'debt-positive' : (debt < 0 ? 'debt-negative' : 'debt-zero');
+      const debtText = debt === 0 ? '0 сом' : (debt > 0 ? `${debt.toLocaleString('ru-RU')} сом` : `Переплата ${Math.abs(debt).toLocaleString('ru-RU')} сом`);
+
       card.innerHTML = `
         <div class="card-header">
           <div class="card-name">${escapeHtml(c.name)}</div>
@@ -294,11 +298,16 @@
             ${statusEmoji(c.is_allowed)} ${statusLabel(c.is_allowed)}
           </div>
         </div>
+        <div class="debt-line ${debtClass}">
+          Задолженность: <strong>${debtText}</strong>
+        </div>
         <div class="card-actions">
           <button class="btn ${c.is_allowed ? 'btn-danger' : 'btn-primary'} toggle-status-btn" data-id="${c.id}">
             ${c.is_allowed ? 'Запретить закуп' : 'Разрешить закуп'}
           </button>
-          <button class="btn btn-secondary rename-btn" data-id="${c.id}">Переименовать</button>
+          <button class="btn btn-secondary shipment-btn" data-id="${c.id}">Отгрузка</button>
+          <button class="btn btn-secondary payment-btn" data-id="${c.id}">Принято денег</button>
+          <button class="btn btn-ghost rename-btn" data-id="${c.id}">Переименовать</button>
           <button class="btn btn-ghost archive-btn" data-id="${c.id}">Архивировать</button>
         </div>
       `;
@@ -313,6 +322,24 @@
         const item = counterparties.find(c => c.id === id);
         if (!item) return;
         openStatusConfirm(item);
+      });
+    });
+
+    $$('.shipment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const item = counterparties.find(c => c.id === id);
+        if (!item) return;
+        openAmountModal(item, 'shipment');
+      });
+    });
+
+    $$('.payment-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const item = counterparties.find(c => c.id === id);
+        if (!item) return;
+        openAmountModal(item, 'payment');
       });
     });
 
@@ -583,6 +610,8 @@
         item.className = 'history-item';
 
         let actionText = '';
+        const amountStr = entry.amount ? `${Number(entry.amount).toLocaleString('ru-RU')} сом` : '';
+
         switch (entry.action) {
           case 'created':
             actionText = `создал контрагента «${entry.counterparty_name}» (закуп разрешён)`;
@@ -597,6 +626,12 @@
             break;
           case 'archived':
             actionText = `архивировал «${entry.counterparty_name}»`;
+            break;
+          case 'shipment':
+            actionText = `отгрузка «${entry.counterparty_name}» на ${amountStr}`;
+            break;
+          case 'payment':
+            actionText = `принято денег от «${entry.counterparty_name}»: ${amountStr}`;
             break;
           default:
             actionText = `${entry.action} — ${entry.counterparty_name}`;
@@ -682,6 +717,90 @@
       renderList();
     }
   }
+
+  // ========== Модальное окно суммы (отгрузка / оплата) ==========
+  const amountOverlay = $('#amount-overlay');
+  const amountTitle = $('#amount-title');
+  const amountForm = $('#amount-form');
+  const amountInput = $('#amount-input');
+  const amountError = $('#amount-error');
+  const amountCancel = $('#amount-cancel');
+  const amountSubmit = $('#amount-submit');
+
+  let amountMode = null; // 'shipment' | 'payment'
+  let amountCounterparty = null;
+
+  function openAmountModal(item, mode) {
+    amountMode = mode;
+    amountCounterparty = item;
+    amountInput.value = '';
+    amountError.classList.add('hidden');
+
+    if (mode === 'shipment') {
+      amountTitle.textContent = `Отгрузка: ${item.name}`;
+      amountSubmit.textContent = 'Записать отгрузку';
+    } else {
+      amountTitle.textContent = `Принято денег: ${item.name}`;
+      amountSubmit.textContent = 'Записать оплату';
+    }
+
+    amountOverlay.classList.remove('hidden');
+    setTimeout(() => amountInput.focus(), 100);
+  }
+
+  function closeAmountModal() {
+    amountOverlay.classList.add('hidden');
+    amountMode = null;
+    amountCounterparty = null;
+    isSubmitting = false;
+  }
+
+  amountCancel.addEventListener('click', closeAmountModal);
+  amountOverlay.addEventListener('click', (e) => {
+    if (e.target === amountOverlay) closeAmountModal();
+  });
+
+  amountForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (isSubmitting || !amountCounterparty || !amountMode) return;
+    isSubmitting = true;
+    amountSubmit.disabled = true;
+    amountError.classList.add('hidden');
+
+    const amount = parseInt(amountInput.value, 10);
+    if (!amount || amount <= 0) {
+      amountError.textContent = 'Введите сумму больше нуля';
+      amountError.classList.remove('hidden');
+      isSubmitting = false;
+      amountSubmit.disabled = false;
+      return;
+    }
+
+    try {
+      const fnName = amountMode === 'shipment' ? 'add_shipment' : 'add_payment';
+      const { data, error } = await supabase.rpc(fnName, {
+        p_id: amountCounterparty.id,
+        p_amount: amount
+      });
+      if (error) throw error;
+
+      const idx = counterparties.findIndex(c => c.id === amountCounterparty.id);
+      if (idx !== -1 && data) {
+        counterparties[idx] = data;
+        renderList();
+      }
+
+      showToast(amountMode === 'shipment' ? 'Отгрузка записана' : 'Оплата записана', 'success');
+      closeAmountModal();
+    } catch (err) {
+      console.error(err);
+      amountError.textContent = err.message || 'Ошибка сохранения';
+      amountError.classList.remove('hidden');
+    } finally {
+      isSubmitting = false;
+      amountSubmit.disabled = false;
+    }
+  });
 
   // ========== Обработка офлайна ==========
   window.addEventListener('online', () => {

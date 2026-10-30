@@ -325,6 +325,26 @@ input::placeholder {
   color: var(--danger);
 }
 
+.debt-line {
+  font-size: 1.05rem;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.debt-line.debt-positive {
+  color: #fbbf24;
+}
+
+.debt-line.debt-negative {
+  color: #34d399;
+}
+
+.debt-line.debt-zero {
+  color: var(--text-muted);
+}
+
 .card-actions {
   display: flex;
   flex-wrap: wrap;

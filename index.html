@@ -120,6 +120,24 @@
     </div>
   </div>
 
+  <!-- Модальное окно: Ввод суммы (отгрузка / оплата) -->
+  <div id="amount-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="amount-title">Сумма</h2>
+      <form id="amount-form">
+        <div class="form-group">
+          <label for="amount-input">Сумма (сом)</label>
+          <input type="number" id="amount-input" required min="1" step="1" placeholder="Например: 15000" inputmode="numeric" />
+        </div>
+        <div id="amount-error" class="error-message hidden"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="amount-cancel">Отмена</button>
+          <button type="submit" class="btn btn-primary" id="amount-submit">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Модальное окно: История -->
   <div id="history-overlay" class="modal-overlay hidden">
     <div class="modal history-modal">
@@ -149,8 +167,8 @@
     // Project URL и anon/public key можно найти в:
     // Supabase Dashboard → Project Settings → API
     // ============================================================
-    window.SUPABASE_URL = 'https://fjiaicyuspzytxkzdxsd.supabase.co';
-    window.SUPABASE_ANON_KEY = 'sb_publishable_kZq45elir65pTYX7M2jyjA_YO4qdTUY';
+    window.SUPABASE_URL = 'https://YOUR_PROJECT_REF.supabase.co';
+    window.SUPABASE_ANON_KEY = 'YOUR_ANON_KEY_HERE';
   </script>
   <script src="app.js"></script>
 </body>
