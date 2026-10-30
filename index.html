@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1e293b" />
+  <title>Контроль контрагентов</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <!-- Экран входа -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <h1>Контроль контрагентов</h1>
+      <p class="subtitle">Вход для сотрудников</p>
+
+      <form id="login-form">
+        <div class="form-group">
+          <label for="email">Электронная почта</label>
+          <input type="email" id="email" required autocomplete="username" placeholder="email@example.com" />
+        </div>
+        <div class="form-group">
+          <label for="password">Пароль</label>
+          <input type="password" id="password" required autocomplete="current-password" placeholder="••••••••" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block" id="login-btn">
+          Войти
+        </button>
+      </form>
+
+      <div id="login-error" class="error-message hidden"></div>
+      <div id="login-loading" class="loading-message hidden">Вход...</div>
+    </div>
+  </div>
+
+  <!-- Основной экран -->
+  <div id="app-screen" class="screen hidden">
+    <header class="app-header">
+      <div class="header-top">
+        <h1>Контроль контрагентов</h1>
+        <button id="logout-btn" class="btn btn-ghost" title="Выйти">Выйти</button>
+      </div>
+      <div class="user-info">
+        <span id="current-user-email"></span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- Панель управления -->
+      <div class="controls">
+        <div class="search-box">
+          <input type="search" id="search-input" placeholder="Поиск по названию..." autocomplete="off" />
+        </div>
+
+        <div class="filter-sort">
+          <select id="filter-status">
+            <option value="all">Все</option>
+            <option value="allowed">🟢 Разрешён</option>
+            <option value="forbidden">🔴 Запрещён</option>
+          </select>
+          <select id="sort-by">
+            <option value="name-asc">Название А→Я</option>
+            <option value="name-desc">Название Я→А</option>
+            <option value="updated-desc">Сначала новые изменения</option>
+          </select>
+        </div>
+
+        <div class="action-buttons">
+          <button id="add-btn" class="btn btn-primary">+ Добавить контрагента</button>
+          <button id="history-btn" class="btn btn-secondary">История действий</button>
+        </div>
+      </div>
+
+      <!-- Список контрагентов -->
+      <div id="counterparties-list" class="cards-list">
+        <!-- Карточки будут здесь -->
+      </div>
+
+      <div id="empty-state" class="empty-state hidden">
+        <p>Нет контрагентов</p>
+        <p class="hint">Нажмите «+ Добавить контрагента», чтобы создать первого</p>
+      </div>
+
+      <div id="loading-state" class="loading-state hidden">
+        <div class="spinner"></div>
+        <p>Загрузка...</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- Модальное окно: Добавить / Переименовать -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="modal-title">Добавить контрагента</h2>
+      <form id="modal-form">
+        <div class="form-group">
+          <label for="counterparty-name">Название контрагента</label>
+          <input type="text" id="counterparty-name" required maxlength="200" placeholder="Например: Магазин №1" />
+        </div>
+        <div id="modal-error" class="error-message hidden"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="modal-cancel">Отмена</button>
+          <button type="submit" class="btn btn-primary" id="modal-submit">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно: Подтверждение смены статуса -->
+  <div id="confirm-overlay" class="modal-overlay hidden">
+    <div class="modal confirm-modal">
+      <h2 id="confirm-title">Подтверждение</h2>
+      <p id="confirm-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="confirm-cancel">Отмена</button>
+        <button type="button" class="btn btn-danger" id="confirm-ok">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно: История -->
+  <div id="history-overlay" class="modal-overlay hidden">
+    <div class="modal history-modal">
+      <div class="history-header">
+        <h2>История действий</h2>
+        <button class="btn btn-ghost" id="history-close">Закрыть</button>
+      </div>
+      <div id="history-list" class="history-list">
+        <!-- Записи истории -->
+      </div>
+      <div id="history-empty" class="empty-state hidden">
+        <p>История пока пуста</p>
+      </div>
+      <div id="history-loading" class="loading-state hidden">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Тост-уведомления -->
+  <div id="toast" class="toast hidden"></div>
+
+  <!-- Конфигурация (замените на свои значения) -->
+  <script>
+    // ============================================================
+    // ВАЖНО: Замените эти значения на данные вашего проекта Supabase
+    // Project URL и anon/public key можно найти в:
+    // Supabase Dashboard → Project Settings → API
+    // ============================================================
+    window.SUPABASE_URL = 'https://fjiaicyuspzytxkzdxsd.supabase.co';
+    window.SUPABASE_ANON_KEY = 'sb_publishable_kZq45elir65pTYX7M2jyjA_YO4qdTUY';
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>
